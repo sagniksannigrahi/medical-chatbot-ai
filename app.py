@@ -19,41 +19,42 @@ GOOGLE_API_KEY=os.environ.get('GOOGLE_API_KEY')
 os.environ["PINECONE_API_KEY"] = PINECONE_API_KEY
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
-embeddings = download_hugging_face_embeddings()
+retriever = None
+rag_chain = None
+
+def get_rag_chain():
+    global retriever, rag_chain
+    if rag_chain is None:
+        embeddings = download_hugging_face_embeddings()
+        docsearch = PineconeVectorStore.from_existing_index(
+            index_name="medicalbot",
+            embedding=embeddings
+        )
+        retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":3})
+        llm = ChatGoogleGenerativeAI(model="models/gemini-1.5-flash", temperature=0.4, max_tokens=500)
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", "{input}"),
+        ])
+        question_answer_chain = prompt | llm
+        rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+    return rag_chain
 
 
 index_name = "medicalbot"
 
-# Embed each chunk and upsert the embeddings into your Pinecone index.
-docsearch = PineconeVectorStore.from_existing_index(
-    index_name=index_name,
-    embedding=embeddings
-)
-
-retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":3})
-
-llm = ChatGoogleGenerativeAI(model="models/gemini-1.5-flash", temperature=0.4, max_tokens=500)
-
-prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system_prompt),
-        ("human", "{input}"),
-    ]
-)
 
 #question_answer_chain = create_retrieval_chain(llm, prompt)
 #rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
 
-# Create a chain that formats the prompt and then passes it to the LLM
-question_answer_chain = prompt | llm
 
-# Create the final Retrieval-Augmented Generation chain
-rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
 
 
 @app.route("/")
+def home():
+    return "Medical Chatbot is live!"
 def index():
     return render_template('chat.html')
 
@@ -64,6 +65,7 @@ def chat():
     print("Received message:", msg)
 
     try:
+        rag_chain = get_rag_chain()
         response = rag_chain.invoke({"input": msg})
         answer = response["answer"].content if hasattr(response["answer"], "content") else str(response["answer"])
 
@@ -74,5 +76,4 @@ def chat():
     return str(answer)
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port= port, debug= True)
+    app.run(host="0.0.0.0", port= 8080, debug= True)
