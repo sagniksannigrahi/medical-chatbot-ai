@@ -12,6 +12,7 @@ langchain-core
 langchain-openai
 langchain-experimental
 langchain-pinecone
+langchain_huggingface
 
 huggingface-hub
 faiss-cpu
