@@ -13,6 +13,6 @@ langchain-openai
 langchain-experimental
 langchain-pinecone
 langchain_huggingface
-
+langchain_google_genai
 huggingface-hub
 faiss-cpu
